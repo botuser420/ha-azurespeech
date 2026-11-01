@@ -1,0 +1,38 @@
+name: Streaming TTS tests (temporary)
+
+on:
+  push:
+    branches:
+      - "ci/streaming-tts-tests"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tests:
+    name: Tests and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.9.3"
+      - name: Install shfmt
+        run: sudo apt-get install -y shfmt
+      - name: Install requirements
+        run: script/setup/bootstrap
+      - name: Lint check
+        run: script/lint-check
+      - name: Tests
+        run: |
+          source .local/ha-venv/bin/activate 2>/dev/null || true
+          python -m pytest tests -v
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: home-assistant/actions/hassfest@e3fb68ebda13d88a0d695082f471ba2c83d025fb # master
