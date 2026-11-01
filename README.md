@@ -14,7 +14,7 @@
 
 ## ✨ Features
 
-- **Text-to-Speech (TTS)**: High-quality neural voices from Microsoft Azure with SSML payload support.
+- **Text-to-Speech (TTS)**: High-quality neural voices from Microsoft Azure with SSML payload support; audio is streamed to Home Assistant while Azure is still synthesizing, so playback can start earlier.
 - **Speech-to-Text (STT)**: High-accuracy real-time speech recognition for Home Assistant Voice Assistant (Assist).
 - **Dynamic Voice Discovery**: Dynamically fetches 500+ Azure neural voices across all regions and languages.
 - **UI Configuration & Options Flow**: Easy setup via UI with dropdown selectors for default voice, language, pitch, rate, audio formats (`mp3`/`wav`/`ogg`), and profanity filtering.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any, Final
 
 import aiohttp
@@ -124,6 +125,51 @@ class AzureSpeechApiClient:
             raise AzureSpeechApiClientCommunicationError("Timeout generating TTS audio from Azure Speech API") from err
         except aiohttp.ClientError as err:
             raise AzureSpeechApiClientCommunicationError(f"Connection error generating TTS audio: {err}") from err
+
+    async def stream_tts_audio(
+        self,
+        ssml_content: str,
+        output_format: str = "audio-24khz-48kbitrate-mono-mp3",
+    ) -> AsyncIterator[bytes]:
+        """Stream TTS synthesis audio from Azure Speech REST API as it arrives.
+
+        Same endpoint, headers and SSML as `generate_tts_audio`, but the audio
+        chunks are yielded in order while the response body is still being
+        received. The connection is closed when the stream ends or the consumer
+        stops iterating. Timeouts apply to connecting and to each read, not to
+        the whole stream.
+
+        :param ssml_content: SSML XML payload string.
+        :param output_format: X-Microsoft-OutputFormat header value.
+        :return: Async iterator of raw audio byte chunks (MP3, WAV, OPUS).
+        """
+        url = f"{self.tts_base_url}/cognitiveservices/v1"
+        headers = self._headers(
+            {
+                "Content-Type": "application/ssml+xml",
+                "X-Microsoft-OutputFormat": output_format,
+            }
+        )
+        timeout = aiohttp.ClientTimeout(total=None, connect=TIMEOUT, sock_read=TIMEOUT)
+        response: aiohttp.ClientResponse | None = None
+        try:
+            response = await self._session.post(
+                url,
+                headers=headers,
+                data=ssml_content.encode("utf-8"),
+                timeout=timeout,
+            )
+            await self._handle_response_errors(response)
+            async for chunk in response.content.iter_any():
+                if chunk:
+                    yield chunk
+        except TimeoutError as err:
+            raise AzureSpeechApiClientCommunicationError("Timeout streaming TTS audio from Azure Speech API") from err
+        except aiohttp.ClientError as err:
+            raise AzureSpeechApiClientCommunicationError(f"Connection error streaming TTS audio: {err}") from err
+        finally:
+            if response is not None:
+                response.close()
 
     async def transcribe_stt_audio(
         self,

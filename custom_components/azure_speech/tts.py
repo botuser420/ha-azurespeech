@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from custom_components.azure_speech.const import (
@@ -20,8 +21,16 @@ from custom_components.azure_speech.const import (
 from custom_components.azure_speech.data import AzureSpeechConfigEntry
 from custom_components.azure_speech.entity import AzureSpeechEntity
 from custom_components.azure_speech.entity_utils import generate_ssml
-from homeassistant.components.tts import ATTR_AUDIO_OUTPUT, ATTR_VOICE, TextToSpeechEntity, TtsAudioType
-from homeassistant.core import HomeAssistant
+from homeassistant.components.tts import (
+    ATTR_AUDIO_OUTPUT,
+    ATTR_VOICE,
+    TextToSpeechEntity,
+    TTSAudioRequest,
+    TTSAudioResponse,
+    TtsAudioType,
+)
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -85,6 +94,69 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
         :param options: Optional overrides (voice, pitch, rate, audio_output).
         :return: Tuple of (audio_extension, audio_bytes).
         """
+        audio_fmt, azure_output_format, ssml = self._build_request(message, language, options)
+
+        audio_bytes = await self.coordinator.client.generate_tts_audio(
+            ssml_content=ssml,
+            output_format=azure_output_format,
+        )
+
+        return (audio_fmt, audio_bytes)
+
+    @callback
+    def async_supports_streaming_input(self) -> bool:
+        """Return that this engine accepts streamed input (messages are joined before synthesis)."""
+        return True
+
+    async def async_stream_tts_audio(self, request: TTSAudioRequest) -> TTSAudioResponse:
+        """Stream TTS audio from Azure Speech API as it is received.
+
+        Azure needs a complete SSML document, so the whole message is collected
+        first. The first audio chunk is awaited here, so errors before any audio
+        arrives are raised to the caller instead of ending a silent stream.
+
+        :param request: TTS request with language, options and message generator.
+        :return: Audio response with the extension and an async chunk generator.
+        :raises HomeAssistantError: If Azure returns no audio.
+        """
+        message = "".join([part async for part in request.message_gen])
+        audio_fmt, azure_output_format, ssml = self._build_request(message, request.language, request.options)
+
+        audio = self.coordinator.client.stream_tts_audio(
+            ssml_content=ssml,
+            output_format=azure_output_format,
+        )
+        try:
+            first_chunk = await anext(audio)
+        except StopAsyncIteration as err:
+            raise HomeAssistantError("Azure Speech returned no audio") from err
+        except BaseException:
+            await audio.aclose()
+            raise
+
+        async def data_gen() -> AsyncGenerator[bytes]:
+            try:
+                yield first_chunk
+                async for chunk in audio:
+                    yield chunk
+            finally:
+                await audio.aclose()
+
+        return TTSAudioResponse(audio_fmt, data_gen())
+
+    def _build_request(
+        self,
+        message: str,
+        language: str | None,
+        options: dict[str, Any] | None,
+    ) -> tuple[str, str, str]:
+        """Resolve options and build the synthesis request.
+
+        :param message: Text string or SSML XML to synthesize.
+        :param language: Requested language code.
+        :param options: Optional overrides (voice, pitch, rate, audio_output).
+        :return: Tuple of (audio_extension, azure_output_format, ssml).
+        """
         opts = options or {}
         voice = opts.get(ATTR_VOICE, self._entry.options.get(CONF_VOICE, DEFAULT_VOICE))
         pitch = opts.get(CONF_PITCH, self._entry.options.get(CONF_PITCH, DEFAULT_PITCH))
@@ -101,12 +173,7 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
             rate=rate,
         )
 
-        audio_bytes = await self.coordinator.client.generate_tts_audio(
-            ssml_content=ssml,
-            output_format=azure_output_format,
-        )
-
-        return (audio_fmt, audio_bytes)
+        return (audio_fmt, azure_output_format, ssml)
 
 
 async def async_setup_entry(
