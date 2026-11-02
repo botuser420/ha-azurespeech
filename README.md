@@ -17,7 +17,7 @@
 - **Text-to-Speech (TTS)**: High-quality neural voices from Microsoft Azure with SSML payload support.
 - **Speech-to-Text (STT)**: High-accuracy real-time speech recognition for Home Assistant Voice Assistant (Assist).
 - **Dynamic Voice Discovery**: Dynamically fetches 500+ Azure neural voices across all regions and languages.
-- **UI Configuration & Options Flow**: Easy setup via UI with dropdown selectors for default voice, language, pitch, rate, audio formats (`mp3`/`wav`/`ogg`), and profanity filtering.
+- **UI Configuration & Options Flow**: Easy setup via UI with dropdown selectors for default voice, language, pitch, rate, speaking style (Azure `mstts:express-as`, e.g. `agent` for `nl-NL-Grant:MAI-Voice-2.1`; empty = off), audio formats (`mp3`/`wav`/`ogg`), and profanity filtering.
 - **Diagnostic Entities**: Monitor API connection status and cached voice counts.
 - **Custom Service Action**: `azure_speech.refresh_voices` service action to update cached voices on demand.
 - **Pure Async Architecture**: Built with lightweight `aiohttp` (no native C binary dependencies, fully non-blocking on HA event loop).

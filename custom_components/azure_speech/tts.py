@@ -10,11 +10,13 @@ from custom_components.azure_speech.const import (
     CONF_LANGUAGE,
     CONF_PITCH,
     CONF_RATE,
+    CONF_STYLE,
     CONF_VOICE,
     DEFAULT_AUDIO_FORMAT,
     DEFAULT_LANGUAGE,
     DEFAULT_PITCH,
     DEFAULT_RATE,
+    DEFAULT_STYLE,
     DEFAULT_VOICE,
 )
 from custom_components.azure_speech.data import AzureSpeechConfigEntry
@@ -60,7 +62,7 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
     @property
     def supported_options(self) -> list[str]:
         """Return list of supported options in TTS call."""
-        return [ATTR_VOICE, CONF_PITCH, CONF_RATE, ATTR_AUDIO_OUTPUT]
+        return [ATTR_VOICE, CONF_PITCH, CONF_RATE, CONF_STYLE, ATTR_AUDIO_OUTPUT]
 
     @property
     def default_options(self) -> dict[str, Any]:
@@ -69,6 +71,7 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
             ATTR_VOICE: self._entry.options.get(CONF_VOICE, DEFAULT_VOICE),
             CONF_PITCH: self._entry.options.get(CONF_PITCH, DEFAULT_PITCH),
             CONF_RATE: self._entry.options.get(CONF_RATE, DEFAULT_RATE),
+            CONF_STYLE: self._entry.options.get(CONF_STYLE, DEFAULT_STYLE),
             ATTR_AUDIO_OUTPUT: self._entry.options.get(CONF_AUDIO_FORMAT, DEFAULT_AUDIO_FORMAT),
         }
 
@@ -82,13 +85,14 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
 
         :param message: Text string or SSML XML to synthesize.
         :param language: Requested language code.
-        :param options: Optional overrides (voice, pitch, rate, audio_output).
+        :param options: Optional overrides (voice, pitch, rate, style, audio_output).
         :return: Tuple of (audio_extension, audio_bytes).
         """
         opts = options or {}
         voice = opts.get(ATTR_VOICE, self._entry.options.get(CONF_VOICE, DEFAULT_VOICE))
         pitch = opts.get(CONF_PITCH, self._entry.options.get(CONF_PITCH, DEFAULT_PITCH))
         rate = opts.get(CONF_RATE, self._entry.options.get(CONF_RATE, DEFAULT_RATE))
+        style = opts.get(CONF_STYLE, self._entry.options.get(CONF_STYLE, DEFAULT_STYLE))
         audio_fmt = opts.get(ATTR_AUDIO_OUTPUT, self._entry.options.get(CONF_AUDIO_FORMAT, DEFAULT_AUDIO_FORMAT))
 
         azure_output_format = AZURE_OUTPUT_FORMATS.get(audio_fmt, AZURE_OUTPUT_FORMATS[DEFAULT_AUDIO_FORMAT])
@@ -99,6 +103,7 @@ class AzureSpeechTTSEntity(TextToSpeechEntity, AzureSpeechEntity):
             language=language or self.default_language,
             pitch=pitch,
             rate=rate,
+            style=style,
         )
 
         audio_bytes = await self.coordinator.client.generate_tts_audio(

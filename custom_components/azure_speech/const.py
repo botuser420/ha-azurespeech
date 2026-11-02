@@ -19,6 +19,7 @@ CONF_VOICE: Final = "voice"
 CONF_LANGUAGE: Final = "language"
 CONF_PITCH: Final = "pitch"
 CONF_RATE: Final = "rate"
+CONF_STYLE: Final = "style"
 CONF_AUDIO_FORMAT: Final = "audio_format"
 CONF_PROFANITY_MODE: Final = "profanity_mode"
 
@@ -28,6 +29,7 @@ DEFAULT_LANGUAGE: Final = "en-US"
 DEFAULT_VOICE: Final = "en-US-AvaMultilingualNeural"
 DEFAULT_PITCH: Final = "default"
 DEFAULT_RATE: Final = "default"
+DEFAULT_STYLE: Final = ""  # empty = no mstts:express-as wrapper
 DEFAULT_AUDIO_FORMAT: Final = "mp3"
 DEFAULT_PROFANITY_MODE: Final = "masked"
 

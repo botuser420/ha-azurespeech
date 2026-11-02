@@ -116,3 +116,16 @@ async def test_options_flow(hass: HomeAssistant, mock_config_entry: MockConfigEn
     assert result2["type"] == "create_entry"
     assert mock_config_entry.options[CONF_VOICE] == "en-US-AvaMultilingualNeural"
     assert mock_config_entry.options[CONF_AUDIO_FORMAT] == "mp3"
+
+
+async def test_options_flow_style(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:
+    """The speaking style can be set in the options flow."""
+    mock_config_entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    result2 = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_VOICE: "nl-NL-Grant:MAI-Voice-2.1", "style": "agent"},
+    )
+    assert result2["type"] == "create_entry"
+    assert mock_config_entry.options["style"] == "agent"

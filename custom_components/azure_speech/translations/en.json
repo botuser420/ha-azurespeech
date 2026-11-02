@@ -43,12 +43,13 @@
     "step": {
       "init": {
         "title": "Azure Speech Settings",
-        "description": "Configure default Text-to-Speech voice, language, pitch, rate, audio encoding, and profanity filtering.",
+        "description": "Configure default Text-to-Speech voice, language, pitch, rate, speaking style, audio encoding, and profanity filtering.",
         "data": {
           "voice": "Default Voice",
           "language": "Default Language",
           "pitch": "Speaking Pitch",
           "rate": "Speaking Rate",
+          "style": "Speaking Style (optional, e.g. agent)",
           "audio_format": "Audio Format",
           "profanity_mode": "Profanity Filter Mode"
         }
