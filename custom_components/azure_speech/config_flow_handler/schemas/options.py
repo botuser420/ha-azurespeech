@@ -10,12 +10,14 @@ from custom_components.azure_speech.const import (
     CONF_PITCH,
     CONF_PROFANITY_MODE,
     CONF_RATE,
+    CONF_STYLE,
     CONF_VOICE,
     DEFAULT_AUDIO_FORMAT,
     DEFAULT_LANGUAGE,
     DEFAULT_PITCH,
     DEFAULT_PROFANITY_MODE,
     DEFAULT_RATE,
+    DEFAULT_STYLE,
     DEFAULT_VOICE,
 )
 from homeassistant.helpers.selector import (
@@ -65,6 +67,10 @@ def get_options_schema(
             vol.Optional(
                 CONF_RATE,
                 default=current_options.get(CONF_RATE, DEFAULT_RATE),
+            ): TextSelector(TextSelectorConfig()),
+            vol.Optional(
+                CONF_STYLE,
+                default=current_options.get(CONF_STYLE, DEFAULT_STYLE),
             ): TextSelector(TextSelectorConfig()),
             vol.Optional(
                 CONF_AUDIO_FORMAT,

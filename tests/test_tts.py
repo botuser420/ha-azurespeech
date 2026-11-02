@@ -15,6 +15,9 @@ from custom_components.azure_speech.api import (
     AzureSpeechApiClientError,
     AzureSpeechApiClientRateLimitError,
 )
+
+
+from custom_components.azure_speech.const import CONF_STYLE, CONF_VOICE
 from custom_components.azure_speech.tts import AzureSpeechTTSEntity
 from homeassistant.components.tts import TTSAudioRequest
 from homeassistant.core import HomeAssistant
@@ -270,3 +273,125 @@ async def test_get_tts_audio_unchanged_over_http(
     assert result == ("mp3", b"whole answer")
     headers = _tts_calls(aioclient_mock)[0][3]
     assert headers["X-Microsoft-OutputFormat"] == "audio-24khz-48kbitrate-mono-mp3"
+
+
+def _sent_ssml(client: AsyncMock) -> str:
+    """Return the SSML passed to the mocked Azure client."""
+    return client.generate_tts_audio.call_args.kwargs["ssml_content"]
+
+
+async def _setup(hass: HomeAssistant, entry: MockConfigEntry, client: AsyncMock) -> AzureSpeechTTSEntity:
+    """Set up the integration with a mocked client and return a TTS entity."""
+    entry.add_to_hass(hass)
+    with patch("custom_components.azure_speech.AzureSpeechApiClient", return_value=client):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    return AzureSpeechTTSEntity(entry)
+
+
+async def test_tts_style_defaults_to_none(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: AsyncMock,
+) -> None:
+    """Without a style option the request has no express-as and the style is advertised."""
+    tts_entity = await _setup(hass, mock_config_entry, mock_api_client)
+    assert CONF_STYLE in tts_entity.supported_options
+    assert tts_entity.default_options[CONF_STYLE] == ""
+
+    await tts_entity.async_get_tts_audio(message="Hello", language="en-US")
+    assert "express-as" not in _sent_ssml(mock_api_client)
+
+
+async def test_tts_style_from_integration_options(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: AsyncMock,
+) -> None:
+    """The integration's style option reaches the Azure request body."""
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={CONF_VOICE: "nl-NL-Grant:MAI-Voice-2.1", CONF_STYLE: "agent"}
+    )
+    tts_entity = await _setup(hass, mock_config_entry, mock_api_client)
+    assert tts_entity.default_options[CONF_STYLE] == "agent"
+
+    await tts_entity.async_get_tts_audio(message="Hallo", language="nl-NL")
+    ssml = _sent_ssml(mock_api_client)
+    assert '<mstts:express-as style="agent">' in ssml
+    assert "nl-NL-Grant:MAI-Voice-2.1" in ssml
+
+
+async def test_tts_style_call_option_overrides_integration_option(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api_client: AsyncMock,
+) -> None:
+    """A per-call style wins over the integration option, and an empty one switches it off."""
+    hass.config_entries.async_update_entry(mock_config_entry, options={CONF_STYLE: "agent"})
+    tts_entity = await _setup(hass, mock_config_entry, mock_api_client)
+
+    await tts_entity.async_get_tts_audio(message="Hi", language="en-US", options={CONF_STYLE: "cheerful"})
+    ssml = _sent_ssml(mock_api_client)
+    assert 'style="cheerful"' in ssml
+    assert "agent" not in ssml
+
+    await tts_entity.async_get_tts_audio(message="Hi", language="en-US", options={CONF_STYLE: ""})
+    assert "express-as" not in _sent_ssml(mock_api_client)
+
+
+async def test_stream_tts_audio_style_reaches_request_body(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    mock_voices_list: list[dict],
+) -> None:
+    """The integration's style and a per-call style reach the streaming Azure request."""
+    hass.config_entries.async_update_entry(mock_config_entry, options={CONF_STYLE: "agent"})
+    entity = await _setup_entity(hass, mock_config_entry, aioclient_mock, mock_voices_list)
+    aioclient_mock.post(TTS_URL, content=b"audio")
+
+    response = await entity.async_stream_tts_audio(_request("Hallo"))
+    [chunk async for chunk in response.data_gen]
+    data = _tts_calls(aioclient_mock)[0][2]
+    assert b'<mstts:express-as style="agent">' in data
+    assert b"xmlns:mstts='https://www.w3.org/2001/mstts'" in data
+
+    response = await entity.async_stream_tts_audio(_request("Hallo", options={CONF_STYLE: "cheerful"}))
+    [chunk async for chunk in response.data_gen]
+    data = _tts_calls(aioclient_mock)[1][2]
+    assert b'style="cheerful"' in data
+    assert b"agent" not in data
+
+
+async def test_stream_tts_audio_without_style_has_no_express_as(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    mock_voices_list: list[dict],
+) -> None:
+    """Without a style the streaming request body has no express-as wrapper."""
+    entity = await _setup_entity(hass, mock_config_entry, aioclient_mock, mock_voices_list)
+    aioclient_mock.post(TTS_URL, content=b"audio")
+
+    response = await entity.async_stream_tts_audio(_request("Hello"))
+    [chunk async for chunk in response.data_gen]
+    assert b"express-as" not in _tts_calls(aioclient_mock)[0][2]
+
+
+async def test_get_tts_audio_style_reaches_request_body(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    mock_voices_list: list[dict],
+) -> None:
+    """The style also reaches the Azure request body of the non-streaming call."""
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={CONF_VOICE: "nl-NL-Grant:MAI-Voice-2.1", CONF_STYLE: "agent"}
+    )
+    entity = await _setup_entity(hass, mock_config_entry, aioclient_mock, mock_voices_list)
+    aioclient_mock.post(TTS_URL, content=b"whole answer")
+
+    await entity.async_get_tts_audio(message="Hallo", language="nl-NL")
+    data = _tts_calls(aioclient_mock)[0][2]
+    assert b'<mstts:express-as style="agent">' in data
+    assert b"nl-NL-Grant:MAI-Voice-2.1" in data
