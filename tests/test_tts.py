@@ -15,8 +15,6 @@ from custom_components.azure_speech.api import (
     AzureSpeechApiClientError,
     AzureSpeechApiClientRateLimitError,
 )
-
-
 from custom_components.azure_speech.const import CONF_STYLE, CONF_VOICE
 from custom_components.azure_speech.tts import AzureSpeechTTSEntity
 from homeassistant.components.tts import TTSAudioRequest
@@ -142,6 +140,7 @@ async def test_stream_tts_audio_uses_requested_format(
 )
 async def test_stream_tts_audio_error_before_first_audio(
     hass: HomeAssistant,
+    *,
     mock_config_entry: MockConfigEntry,
     aioclient_mock: AiohttpClientMocker,
     mock_voices_list: list[dict],
