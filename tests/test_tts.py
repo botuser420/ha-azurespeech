@@ -1,7 +1,8 @@
 """Tests for Azure Speech TTS platform."""
 
+import asyncio
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -186,6 +187,60 @@ async def test_stream_tts_audio_consumer_can_stop_early(
     assert first
     with pytest.raises(StopAsyncIteration):
         await anext(response.data_gen)
+
+
+async def test_stream_tts_audio_upstream_breaks_mid_stream(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    mock_voices_list: list[dict],
+) -> None:
+    """A stream that breaks after the first chunk raises cleanly, closes the connection and does not hang."""
+    entity = await _setup_entity(hass, mock_config_entry, aioclient_mock, mock_voices_list)
+
+    async def broken_body() -> AsyncGenerator[bytes]:
+        yield b"first chunk"
+        raise aiohttp.ClientPayloadError("connection lost mid-body")
+
+    response = MagicMock(spec=aiohttp.ClientResponse)
+    response.status = 200
+    response.content.iter_any = broken_body
+    session = entity.coordinator.client._session  # noqa: SLF001
+
+    with patch.object(session, "post", AsyncMock(return_value=response)):
+        tts_response = await entity.async_stream_tts_audio(_request("Hello"))
+        stream = tts_response.data_gen
+
+        assert await asyncio.wait_for(anext(stream), timeout=5) == b"first chunk"
+        with pytest.raises(AzureSpeechApiClientCommunicationError):
+            await asyncio.wait_for(anext(stream), timeout=5)
+        with pytest.raises(StopAsyncIteration):
+            await anext(stream)
+
+    response.close.assert_called_once()
+
+
+async def test_stream_tts_audio_timeout_has_no_total_limit(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    mock_voices_list: list[dict],
+) -> None:
+    """The streaming request limits connect and each read, but not the whole stream."""
+    entity = await _setup_entity(hass, mock_config_entry, aioclient_mock, mock_voices_list)
+    aioclient_mock.post(TTS_URL, content=b"audio")
+    session = entity.coordinator.client._session  # noqa: SLF001
+
+    with patch.object(session, "post", wraps=session.post) as post:
+        response = await entity.async_stream_tts_audio(_request("Hello"))
+        _ = [chunk async for chunk in response.data_gen]
+
+    post.assert_called_once()
+    timeout = post.call_args.kwargs["timeout"]
+    assert isinstance(timeout, aiohttp.ClientTimeout)
+    assert timeout.total is None
+    assert timeout.connect is not None
+    assert timeout.sock_read is not None
 
 
 async def test_supports_streaming_input(
