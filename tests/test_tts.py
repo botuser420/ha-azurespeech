@@ -43,7 +43,8 @@ def _sent_ssml(client: AsyncMock) -> str:
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry, client: AsyncMock) -> AzureSpeechTTSEntity:
     """Set up the integration with a mocked client and return a TTS entity."""
-    entry.add_to_hass(hass)
+    if hass.config_entries.async_get_entry(entry.entry_id) is None:
+        entry.add_to_hass(hass)
     with patch("custom_components.azure_speech.AzureSpeechApiClient", return_value=client):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -70,6 +71,7 @@ async def test_tts_style_from_integration_options(
     mock_api_client: AsyncMock,
 ) -> None:
     """The integration's style option reaches the Azure request body."""
+    mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
         mock_config_entry, options={CONF_VOICE: "nl-NL-Grant:MAI-Voice-2.1", CONF_STYLE: "agent"}
     )
@@ -88,6 +90,7 @@ async def test_tts_style_call_option_overrides_integration_option(
     mock_api_client: AsyncMock,
 ) -> None:
     """A per-call style wins over the integration option, and an empty one switches it off."""
+    mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(mock_config_entry, options={CONF_STYLE: "agent"})
     tts_entity = await _setup(hass, mock_config_entry, mock_api_client)
 
